@@ -23,32 +23,40 @@ Vaccinations_df = deltaVaccinations.toDF()
 
 
 
+
 # COMMAND ----------
 
 #joining all DataFrame's to create aggregated dataFrame
 
 from pyspark.sql.functions import col
-Aggregate_demography_Health_df = Demographics_df.join(Health_df,["location_key"],"inner").dropDuplicates()
-Aggregated_df=Epidemiology_df.join(Hospitalizations_df,["date", "location_key",],"inner").join(Mobility_df,["date","location_key"], \
-"inner").join(Vaccinations_df, ["date","location_key"], "inner").join(Aggregate_demography_Health_df,["location_key"],"inner")
+Aggregate_demography_Health_df = Demographics_df.join(Health_df,["location_key"],"full").dropDuplicates()
+Aggregated_df=Epidemiology_df.join(Hospitalizations_df,["date", "location_key",],"left").join(Mobility_df,["date","location_key"], \
+"inner").join(Vaccinations_df, ["date","location_key"], "left").join(Aggregate_demography_Health_df,["location_key"],"inner")
+
+
+#Aggregated_df.show()
+#Aggregated_df.count()
+
 
 # COMMAND ----------
 
 #Creating Aggregated table in Silver layer using bronze layer tables
-try:
-    path = "dbfs:/FileStore/Akash/Silver/Covid_aggregate"
-    Aggregated_df.write.format('delta') \
-       .mode('overwrite') \
-       .option('header','true') \
-       .option('overwriteSchema', 'true') \
-       .partitionBy("date") \
-       .save(f'{path}')
-except exception as err:
-    logger.error(err)
-logging.shutdown()
+path = "dbfs:/FileStore/Akash/Silver/Covid_aggregate"
+Aggregated_df.write.format('delta') \
+      .mode('overwrite') \
+      .option('header','true') \
+      .option('overwriteSchema', 'true') \
+      .partitionBy("date") \
+      .save(f'{path}')
+
 
 # COMMAND ----------
 
 spark.sql("DROP TABLE  IF EXISTS akash_singh.covid_19_data")
 spark.sql("CREATE TABLE akash_singh.covid_19_data USING DELTA LOCATION '/FileStore/Akash/Silver/Covid_aggregate'")
 spark.sql("OPTIMIZE akash_singh.covid_19_data ZORDER BY (location_key)")
+
+# COMMAND ----------
+
+# MAGIC %run
+# MAGIC ./logging

@@ -26,3 +26,8 @@ try:
 except exception as err:
     logger.error(err)
 logging.shutdown()
+
+# COMMAND ----------
+
+# MAGIC %run
+# MAGIC ./logging

@@ -4,17 +4,30 @@ from pandas import *
 from datetime import date,timedelta
 import pyspark.sql.functions as f
 from delta.tables import *
-
+today=date.today()
+yesterday=today-timedelta(days=1)
 #Buffer table is mapped to silver layer(1:1) but if any transformation is done to any table it should be applied to buffer table
+path = "dbfs:/FileStore/Akash/Bronze/Buffer"
+w_path = "dbfs:/FileStore/Akash/Silver/Buffer"
+df=spark.read.format('delta') \
+   .option('header','true') \
+   .load("dbfs:/FileStore/Akash/Bronze/Buffer")
 
-path = "dbfs:/FileStore/Akash/Silver/Buffer"
-deltaBuffer = DeltaTable.forPath(spark, '/FileStore/Akash/Bronze/Buffer')
-deltaBuffer_df = deltaBuffer.toDF()
-deltaBuffer_df.write.format('delta') \
+
+df.write.format('delta') \
    .mode('overwrite') \
    .option('header','true') \
    .option('overwriteSchema', 'true') \
-   .save(f'{path}')
+   .save(f'{w_path}')
+
+deltaBuffer = DeltaTable.forPath(spark, '/FileStore/Akash/Silver/Buffer')
+deltaBuffer_df = deltaBuffer.toDF().dropDuplicates()
+deltaBuffer_df.show()
+deltaBuffer_df.count()
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
@@ -37,8 +50,17 @@ df= deltaBuffer.toDF()
 # COMMAND ----------
 
 #Merging all the updates to Aggregated Table Covid_aggregate
+try:
+    deltaCovidData.alias("target").merge(df.alias("source"),'target.date = source.date and target.location_key=source.location_key') \
+      .whenMatchedUpdateAll() \
+      .whenNotMatchedInsertAll()\
+      .execute()
 
-deltaCovidData.alias("target").merge(df.alias("source"),'target.date = source.date and target.location_key=source.location_key') \
-  .whenMatchedUpdateAll() \
-  .whenNotMatchedInsertAll()\
-  .execute()
+except exception as err:
+    logger.error(err)
+logging.shutdown()
+
+# COMMAND ----------
+
+# MAGIC %run
+# MAGIC ./logging
