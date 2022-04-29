@@ -24,4 +24,5 @@ logging.shutdown()
 
 # COMMAND ----------
 
-
+# MAGIC %run
+# MAGIC ./logging

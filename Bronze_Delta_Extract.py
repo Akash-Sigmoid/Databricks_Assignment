@@ -9,39 +9,44 @@ from pandas import *
 from datetime import date,timedelta
 import pyspark.sql.functions as f
 from delta.tables import *
-epidemiology_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/epidemiology.csv",header=None,nrows=1).iloc[0]
+from pyspark.sql.functions import col
+from pyspark.sql.types import StringType,DateType
+
+epidemiology_data = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/latest/epidemiology.csv")
+demographics_data = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/latest/demographics.csv")
+health_data = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/latest/health.csv")
+hospitalizations_data = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/latest/hospitalizations.csv")
+mobility_data = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/latest/mobility.csv")
+vaccinations_data = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/latest/vaccinations.csv")
+epidemiology_df = spark.createDataFrame(epidemiology_data).withColumn("date",col("date").cast(DateType()))
+demographics_df = spark.createDataFrame(demographics_data)
+health_df = spark.createDataFrame(health_data)
+hospitalizations_df = spark.createDataFrame(hospitalizations_data).withColumn("date",col("date").cast(DateType()))
+mobility_df = spark.createDataFrame(mobility_data).withColumn("date",col("date").cast(DateType()))
+vaccinations_df = spark.createDataFrame(vaccinations_data).withColumn("date",col("date").cast(DateType()))
 today=date.today()
 yesterday=today-timedelta(days=1)
 path = "dbfs:/FileStore/Akash/Bronze/Buffer"
 
-# Reading Today's and yesterday's data from bigquery table by pusing filter to it
+Aggregate_demography_Health_df = demographics_df.join(health_df,["location_key"],"full").dropDuplicates()
+Aggregated_df=epidemiology_df.join(hospitalizations_df,["date", "location_key",],"left").join(mobility_df,["date","location_key"], \
+"inner").join(vaccinations_df, ["date","location_key"], "left").join(Aggregate_demography_Health_df,["location_key"],"left")
 
-data = spark.read \
-  .format("bigquery")   \
-  .option('table', 'bigquery-public-data.covid19_open_data.covid19_open_data') \
-  .option("filter",f"date = '{today}' or date = '{yesterday}'") \
-  .option('header','true') \
-  .load()
-
-# Storing Today's and yesterday's data from bigquery table in BUffer table
-
-data.write.format('delta') \
+Aggregated_df.write.format('delta') \
    .mode('overwrite') \
    .option('header','true') \
    .option('overwriteSchema', 'true') \
    .save(f'{path}')
 
-deltaBuffer= DeltaTable.forPath(spark, '/FileStore/Akash/Bronze/Buffer')
-
 # COMMAND ----------
 
 #Merging and inserting updated todays and yeterday's data in Epidemiology delta table
 
-epidemiology_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/epidemiology.csv",header=None,nrows=1).iloc[0]
-dfffs= data.select(*epidemiology_col)
+#epidemiology_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/epidemiology.csv",header=None,nrows=1).iloc[0]
+#dfffs= data.select(*epidemiology_col)
 deltaEpidemiology= DeltaTable.forPath(spark, '/FileStore/Akash/Bronze/Epidemiology')
 try:
-    deltaEpidemiology.alias("target").merge(dfffs.alias("source"),'target.date = source.date and target.location_key=source.location_key') \
+    deltaEpidemiology.alias("target").merge(epidemiology_df.alias("source"),'target.date = source.date and target.location_key=source.location_key') \
       .whenMatchedUpdate(set =
         {
           "date": "source.date",
@@ -79,8 +84,8 @@ logging.shutdown()
 
 #Merging and inserting updated todays and yeterday's data in Demographics delta table
 
-demographics_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/demographics.csv",header=None,nrows=1).iloc[0]
-dfffs= data.select(*demographics_col).dropDuplicates()
+#demographics_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/demographics.csv",header=None,nrows=1).iloc[0]
+dfffs= demographics_df.dropDuplicates()
 deltaDemographics= DeltaTable.forPath(spark, '/FileStore/Akash/Bronze/Demographics')
 
 deltaDemographics.alias("target").merge(dfffs.alias("source"),'target.location_key=source.location_key') \
@@ -137,8 +142,8 @@ deltaDemographics.alias("target").merge(dfffs.alias("source"),'target.location_k
 
 #Merging and inserting updated todays and yeterday's data in Health delta table
 
-health_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/health.csv",header=None,nrows=1).iloc[0]
-dfffs= data.select(*health_col).dropDuplicates()
+#health_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/health.csv",header=None,nrows=1).iloc[0]
+dfffs= health_df.dropDuplicates()
 deltaHealth= DeltaTable.forPath(spark, '/FileStore/Akash/Bronze/Health')
 
 deltaHealth.alias("target").merge(dfffs.alias("source"),'target.location_key=source.location_key') \
@@ -182,11 +187,11 @@ deltaHealth.alias("target").merge(dfffs.alias("source"),'target.location_key=sou
 
 #Merging and inserting updated todays and yeterday's data in Hospitalizations delta table
 
-hospitalizations_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/hospitalizations.csv",header=None,nrows=1).iloc[0]
-dfffs= data.select(*hospitalizations_col)
+#hospitalizations_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/hospitalizations.csv",header=None,nrows=1).iloc[0]
+#dfffs= data.select(*hospitalizations_col)
 deltaHospitalizations = DeltaTable.forPath(spark, '/FileStore/Akash/Bronze/Hospitalizations')
 
-deltaHospitalizations.alias("target").merge(dfffs.alias("source"),'target.date == source.date and target.location_key = source.location_key') \
+deltaHospitalizations.alias("target").merge(hospitalizations_df.alias("source"),'target.date == source.date and target.location_key = source.location_key') \
   .whenMatchedUpdate(set =
     {
       "date": "source.date",
@@ -223,11 +228,11 @@ deltaHospitalizations.alias("target").merge(dfffs.alias("source"),'target.date =
 
 #Merging and inserting updated todays and yeterday's data in Mobility delta table
 
-mobility_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/mobility.csv",header=None,nrows=1).iloc[0]
-dfffs= data.select(*mobility_col)
+#mobility_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/mobility.csv",header=None,nrows=1).iloc[0]
+#dfffs= data.select(*mobility_col)
 deltaMobility= DeltaTable.forPath(spark, '/FileStore/Akash/Bronze/Mobility')
 
-deltaMobility.alias("target").merge(dfffs.alias("source"),'target.date = source.date and target.location_key=source.location_key') \
+deltaMobility.alias("target").merge(mobility_df.alias("source"),'target.date = source.date and target.location_key=source.location_key') \
   .whenMatchedUpdate(set =
     {
       "date": "source.date",
@@ -258,12 +263,12 @@ deltaMobility.alias("target").merge(dfffs.alias("source"),'target.date = source.
 
 #Merging and inserting updated todays and yeterday's data in vaccinations delta table
 
-vaccinations_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/vaccinations.csv",
-usecols=[0,1,2,3,4,5,6,7],header=None,nrows=1).iloc[0]
-dfffs= data.select(*vaccinations_col)
+#vaccinations_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/vaccinations.csv",
+#usecols=[0,1,2,3,4,5,6,7],header=None,nrows=1).iloc[0]
+#dfffs= data.select(*vaccinations_col)
 deltaVaccinations= DeltaTable.forPath(spark, '/FileStore/Akash/Bronze/Vaccinations')
 
-deltaVaccinations.alias("target").merge(dfffs.alias("source"),'target.date = source.date and target.location_key = source.location_key') \
+deltaVaccinations.alias("target").merge(vaccinations_df.alias("source"),'target.date = source.date and target.location_key = source.location_key') \
   .whenMatchedUpdate(set =
     {
       "date": "source.date",
@@ -292,4 +297,5 @@ deltaVaccinations.alias("target").merge(dfffs.alias("source"),'target.date = sou
 
 # COMMAND ----------
 
-
+# MAGIC %run
+# MAGIC ./logging
