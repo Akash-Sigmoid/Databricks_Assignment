@@ -1,4 +1,9 @@
 # Databricks notebook source
+# MAGIC %run
+# MAGIC ./Logger
+
+# COMMAND ----------
+
 # Reading list of Columns from csv file
 
 import pandas
@@ -82,15 +87,17 @@ df.write.format('delta') \
 # COMMAND ----------
 
 # Storing Vaccinations data in Delta table
-
-path="dbfs:/FileStore/Akash/Bronze/Vaccinations"
-df= data.select(*vaccinations_col)
-df.write.format('delta') \
-   .mode('overwrite') \
-   .option('header','true') \
-   .option('overwriteSchema', 'true') \
-   .save(f'{path}')
-df.show()
+try:
+    path="dbfs:/FileStore/Akash/Bronze/Vaccinations"
+    df= data.select(*vaccinations_col)
+    df.write.format('delta') \
+       .mode('overwrite') \
+       .option('header','true') \
+       .option('overwriteSchema', 'true') \
+       .save(f'{path}')
+except exception as err:
+    logger.error(err)
+logging.shutdown()
 
 # COMMAND ----------
 
@@ -98,5 +105,10 @@ dffs = spark.read.format('delta') \
     .option('header','true') \
     .load("dbfs:/FileStore/Akash/Bronze/Hospitalizations")
 
-dffs.show()
-dffs.count()
+
+logger.info("Number of records:"+str(dffs.count()))
+
+# COMMAND ----------
+
+# MAGIC %run
+# MAGIC ./logging

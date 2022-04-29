@@ -1,4 +1,9 @@
 # Databricks notebook source
+# MAGIC %run
+# MAGIC ./Logger
+
+# COMMAND ----------
+
 # Storing all delta tables in DataFrame
 
 from delta.tables import *
@@ -30,14 +35,17 @@ Aggregated_df=Epidemiology_df.join(Hospitalizations_df,["date", "location_key",]
 # COMMAND ----------
 
 #Creating Aggregated table in Silver layer using bronze layer tables
-
-path = "dbfs:/FileStore/Akash/Silver/Covid_aggregate"
-Aggregated_df.write.format('delta') \
-   .mode('overwrite') \
-   .option('header','true') \
-   .option('overwriteSchema', 'true') \
-   .partitionBy("date") \
-   .save(f'{path}')
+try:
+    path = "dbfs:/FileStore/Akash/Silver/Covid_aggregate"
+    Aggregated_df.write.format('delta') \
+       .mode('overwrite') \
+       .option('header','true') \
+       .option('overwriteSchema', 'true') \
+       .partitionBy("date") \
+       .save(f'{path}')
+except exception as err:
+    logger.error(err)
+logging.shutdown()
 
 # COMMAND ----------
 

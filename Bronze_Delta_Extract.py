@@ -1,4 +1,9 @@
 # Databricks notebook source
+# MAGIC %run
+# MAGIC ./Logger
+
+# COMMAND ----------
+
 import pandas
 from pandas import *
 from datetime import date,timedelta
@@ -35,37 +40,40 @@ deltaBuffer= DeltaTable.forPath(spark, '/FileStore/Akash/Bronze/Buffer')
 epidemiology_col = pandas.read_csv("https://storage.googleapis.com/covid19-open-data/v3/epidemiology.csv",header=None,nrows=1).iloc[0]
 dfffs= data.select(*epidemiology_col)
 deltaEpidemiology= DeltaTable.forPath(spark, '/FileStore/Akash/Bronze/Epidemiology')
-
-deltaEpidemiology.alias("target").merge(dfffs.alias("source"),'target.date = source.date and target.location_key=source.location_key') \
-  .whenMatchedUpdate(set =
-    {
-      "date": "source.date",
-      "location_key" : "source.location_key",
-      "new_confirmed": "source.new_confirmed",
-      "new_deceased": "source.new_deceased",
-      "new_recovered": "source.new_recovered",
-      "new_tested": "source.new_tested",
-      "cumulative_confirmed": "source.cumulative_confirmed",
-      "cumulative_deceased" : "source.cumulative_deceased",
-      "cumulative_recovered" : "source.cumulative_recovered",
-      "cumulative_tested" : "source.cumulative_tested"
-    }
-  ) \
-  .whenNotMatchedInsert(values =
-    {
-      "date": "source.date",
-      "location_key": "source.location_key",
-      "new_confirmed": "source.new_confirmed",
-      "new_deceased": "source.new_deceased",
-      "new_recovered": "source.new_recovered",
-      "new_tested": "source.new_tested",
-      "cumulative_confirmed": "source.cumulative_confirmed",
-      "cumulative_deceased": "source.cumulative_deceased",
-      "cumulative_recovered": "source.cumulative_recovered",
-      "cumulative_tested": "source.cumulative_tested"
-    }
-  ) \
-  .execute()
+try:
+    deltaEpidemiology.alias("target").merge(dfffs.alias("source"),'target.date = source.date and target.location_key=source.location_key') \
+      .whenMatchedUpdate(set =
+        {
+          "date": "source.date",
+          "location_key" : "source.location_key",
+          "new_confirmed": "source.new_confirmed",
+          "new_deceased": "source.new_deceased",
+          "new_recovered": "source.new_recovered",
+          "new_tested": "source.new_tested",
+          "cumulative_confirmed": "source.cumulative_confirmed",
+          "cumulative_deceased" : "source.cumulative_deceased",
+          "cumulative_recovered" : "source.cumulative_recovered",
+          "cumulative_tested" : "source.cumulative_tested"
+        }
+      ) \
+      .whenNotMatchedInsert(values =
+        {
+          "date": "source.date",
+          "location_key": "source.location_key",
+          "new_confirmed": "source.new_confirmed",
+          "new_deceased": "source.new_deceased",
+          "new_recovered": "source.new_recovered",
+          "new_tested": "source.new_tested",
+          "cumulative_confirmed": "source.cumulative_confirmed",
+          "cumulative_deceased": "source.cumulative_deceased",
+          "cumulative_recovered": "source.cumulative_recovered",
+          "cumulative_tested": "source.cumulative_tested"
+        }
+      ) \
+      .execute()
+except exception as err:
+    logger.error(err)
+logging.shutdown()
 
 # COMMAND ----------
 
@@ -281,3 +289,7 @@ deltaVaccinations.alias("target").merge(dfffs.alias("source"),'target.date = sou
     }
   ) \
   .execute()
+
+# COMMAND ----------
+
+
