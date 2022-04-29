@@ -19,7 +19,7 @@ try:
       .option("clusteredFields", "location_key")\
       .save("akash_singh.covid_aggregate")
 except exception as err:
-    logger.error(err)
+    logger.error(err, exc_info=True)
 logging.shutdown()
 
 # COMMAND ----------
